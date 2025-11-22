@@ -30,6 +30,10 @@ function App() {
     }
   };
 
+  const handleImageLoad = (scale) => {
+    setZoomLevel(scale);
+  };
+
   return (
     <div className="app-container">
       <Toolbar
@@ -46,6 +50,7 @@ function App() {
         ref={imageEditorRef}
         zoomLevel={zoomLevel}
         currentTool={currentTool}
+        onImageLoad={handleImageLoad}
       />
     </div>
   );
