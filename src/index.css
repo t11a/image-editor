@@ -89,3 +89,14 @@ canvas {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+.app-title {
+  font-size: 1.2em;
+  font-weight: 700;
+  margin: 0;
+  margin-right: 20px;
+  background: linear-gradient(90deg, #646cff, #9089fc);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
