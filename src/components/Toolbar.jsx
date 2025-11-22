@@ -7,11 +7,43 @@ const Toolbar = ({
   onDownload,
   onReset,
   zoomLevel,
+  currentTool,
+  onToolChange,
 }) => {
   return (
     <div className="toolbar">
       <div className="toolbar-group">
         <h1 className="app-title">Imaginator</h1>
+      </div>
+      <div className="toolbar-group">
+        <button
+          className={currentTool === 'select' ? 'active' : ''}
+          onClick={() => onToolChange('select')}
+          title="Select"
+        >
+          Select
+        </button>
+        <button
+          className={currentTool === 'rect' ? 'active' : ''}
+          onClick={() => onToolChange('rect')}
+          title="Rectangle"
+        >
+          Rect
+        </button>
+        <button
+          className={currentTool === 'arrow' ? 'active' : ''}
+          onClick={() => onToolChange('arrow')}
+          title="Arrow"
+        >
+          Arrow
+        </button>
+        <button
+          className={currentTool === 'text' ? 'active' : ''}
+          onClick={() => onToolChange('text')}
+          title="Text"
+        >
+          Text
+        </button>
       </div>
       <div className="toolbar-group">
         <button onClick={onZoomOut} title="Zoom Out">

@@ -5,6 +5,7 @@ import './App.css';
 
 function App() {
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [currentTool, setCurrentTool] = useState('select');
   const imageEditorRef = useRef(null);
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 3));
@@ -38,8 +39,14 @@ function App() {
         onDownload={handleDownload}
         onReset={handleReset}
         zoomLevel={zoomLevel}
+        currentTool={currentTool}
+        onToolChange={setCurrentTool}
       />
-      <ImageEditor ref={imageEditorRef} zoomLevel={zoomLevel} />
+      <ImageEditor
+        ref={imageEditorRef}
+        zoomLevel={zoomLevel}
+        currentTool={currentTool}
+      />
     </div>
   );
 }
