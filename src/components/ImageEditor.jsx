@@ -17,11 +17,14 @@ const ImageEditor = forwardRef(
     const [currentPath, setCurrentPath] = useState([]); // For pen tool
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
+    const isAddingText = useRef(false);
 
     const [selectedObjectIndex, setSelectedObjectIndex] = useState(null);
     const [dragOffset, setDragOffset] = useState(null);
 
     const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
+
+    const [editingIndex, setEditingIndex] = useState(null);
 
     // History for Undo/Redo
     const [history, setHistory] = useState([]);
@@ -39,6 +42,7 @@ const ImageEditor = forwardRef(
       setObjects(previous);
       setHistory((prev) => prev.slice(0, -1));
       setSelectedObjectIndex(null);
+      setEditingIndex(null);
     }, [history, objects]);
 
     const redo = useCallback(() => {
@@ -48,6 +52,7 @@ const ImageEditor = forwardRef(
       setObjects(next);
       setRedoStack((prev) => prev.slice(0, -1));
       setSelectedObjectIndex(null);
+      setEditingIndex(null);
     }, [redoStack, objects]);
 
     const isPointInObject = (x, y, obj) => {
@@ -120,6 +125,9 @@ const ImageEditor = forwardRef(
       }
 
       const drawShape = (obj, index) => {
+        // Skip rendering text if it's being edited
+        if (index === editingIndex && obj.type === 'text') return;
+
         ctx.beginPath();
         ctx.strokeStyle = obj.color || 'red';
         ctx.lineWidth = obj.strokeWidth || 3;
@@ -254,6 +262,7 @@ const ImageEditor = forwardRef(
       currentPath,
       currentColor,
       strokeWidth,
+      editingIndex,
     ]);
 
     useEffect(() => {
@@ -262,6 +271,8 @@ const ImageEditor = forwardRef(
 
     useEffect(() => {
       const handleKeyDown = (e) => {
+        if (editingIndex !== null) return; // Don't handle delete/undo while editing text
+
         if (
           (e.key === 'Delete' || e.key === 'Backspace') &&
           selectedObjectIndex !== null
@@ -284,13 +295,15 @@ const ImageEditor = forwardRef(
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedObjectIndex, objects, saveHistory, undo, redo]); // Add objects to dep for history
+    }, [selectedObjectIndex, objects, saveHistory, undo, redo, editingIndex]);
 
     useImperativeHandle(ref, () => ({
       copyToClipboard: async () => {
         if (!canvasRef.current) return;
         const prevSelection = selectedObjectIndex;
+        const prevEditing = editingIndex;
         setSelectedObjectIndex(null);
+        setEditingIndex(null);
         setTimeout(async () => {
           try {
             const blob = await new Promise((resolve) =>
@@ -307,19 +320,23 @@ const ImageEditor = forwardRef(
             alert('Failed to copy image.');
           } finally {
             setSelectedObjectIndex(prevSelection);
+            setEditingIndex(prevEditing);
           }
         }, 0);
       },
       downloadImage: () => {
         if (!canvasRef.current) return;
         const prevSelection = selectedObjectIndex;
+        const prevEditing = editingIndex;
         setSelectedObjectIndex(null);
+        setEditingIndex(null);
         setTimeout(() => {
           const link = document.createElement('a');
           link.download = 'edited-image.png';
           link.href = canvasRef.current.toDataURL();
           link.click();
           setSelectedObjectIndex(prevSelection);
+          setEditingIndex(prevEditing);
         }, 0);
       },
       resetImage: () => {
@@ -329,6 +346,7 @@ const ImageEditor = forwardRef(
         setRedoStack([]);
         setImgDimensions({ width: 0, height: 0 });
         setSelectedObjectIndex(null);
+        setEditingIndex(null);
       },
       undo,
       redo,
@@ -380,26 +398,55 @@ const ImageEditor = forwardRef(
       }
 
       if (currentTool === 'text') {
-        const text = prompt('Enter text:');
-        if (text) {
-          saveHistory();
-          setObjects([
-            ...objects,
-            {
-              type: 'text',
-              x,
-              y,
-              text,
-              color: currentColor,
-              strokeWidth: strokeWidth,
-            },
-          ]);
+        e.preventDefault();
+        isAddingText.current = true;
+        saveHistory();
+
+        let currentObjects = [...objects];
+        // Cleanup empty text if we were editing
+        if (
+          editingIndex !== null &&
+          currentObjects[editingIndex] &&
+          currentObjects[editingIndex].text.trim() === ''
+        ) {
+          currentObjects.splice(editingIndex, 1);
         }
+
+        const newTextObj = {
+          type: 'text',
+          x,
+          y,
+          text: '',
+          color: currentColor,
+          strokeWidth: strokeWidth,
+        };
+        const newObjects = [...currentObjects, newTextObj];
+        setObjects(newObjects);
+        setEditingIndex(newObjects.length - 1);
+        setSelectedObjectIndex(newObjects.length - 1);
+
+        setTimeout(() => {
+          isAddingText.current = false;
+        }, 100);
       } else if (currentTool === 'pen') {
         setDrawingStart({ x, y });
         setCurrentPath([{ x, y }]);
       } else {
         setDrawingStart({ x, y });
+      }
+    };
+
+    const handleDoubleClick = (e) => {
+      if (!imageSrc) return;
+      const { x, y } = getCanvasCoordinates(e);
+
+      // Check if double clicked on text
+      for (let i = objects.length - 1; i >= 0; i--) {
+        if (objects[i].type === 'text' && isPointInObject(x, y, objects[i])) {
+          setEditingIndex(i);
+          setSelectedObjectIndex(i);
+          break;
+        }
       }
     };
 
@@ -524,6 +571,26 @@ const ImageEditor = forwardRef(
       setCurrentDragPos(null);
     };
 
+    const handleTextChange = (e, index) => {
+      const newObjects = [...objects];
+      newObjects[index].text = e.target.value;
+      setObjects(newObjects);
+    };
+
+    const handleTextBlur = () => {
+      if (isAddingText.current) return;
+      setEditingIndex(null);
+      // If text is empty, remove it
+      if (
+        editingIndex !== null &&
+        objects[editingIndex] &&
+        objects[editingIndex].text.trim() === ''
+      ) {
+        setObjects((prev) => prev.filter((_, i) => i !== editingIndex));
+        setSelectedObjectIndex(null);
+      }
+    };
+
     const handleDragOver = (e) => {
       e.preventDefault();
       setIsDragging(true);
@@ -545,6 +612,7 @@ const ImageEditor = forwardRef(
           setObjects([]);
           setHistory([]);
           setRedoStack([]);
+          setEditingIndex(null);
         };
         reader.readAsDataURL(file);
       }
@@ -564,6 +632,7 @@ const ImageEditor = forwardRef(
               setObjects([]);
               setHistory([]);
               setRedoStack([]);
+              setEditingIndex(null);
             };
             reader.readAsDataURL(blob);
             break;
@@ -615,21 +684,62 @@ const ImageEditor = forwardRef(
           </div>
         ) : (
           <div className="canvas-wrapper">
-            <canvas
-              ref={canvasRef}
+            <div
               style={{
-                width: imgDimensions.width
-                  ? imgDimensions.width * zoomLevel
-                  : 'auto',
-                height: imgDimensions.height
-                  ? imgDimensions.height * zoomLevel
-                  : 'auto',
-                cursor: currentTool === 'select' ? 'default' : 'crosshair',
+                position: 'relative',
+                width: 'fit-content',
+                height: 'fit-content',
               }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-            />
+            >
+              <canvas
+                ref={canvasRef}
+                style={{
+                  width: imgDimensions.width
+                    ? imgDimensions.width * zoomLevel
+                    : 'auto',
+                  height: imgDimensions.height
+                    ? imgDimensions.height * zoomLevel
+                    : 'auto',
+                  cursor: currentTool === 'select' ? 'default' : 'crosshair',
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onDoubleClick={handleDoubleClick}
+              />
+              {editingIndex !== null && objects[editingIndex] && (
+                <textarea
+                  value={objects[editingIndex].text}
+                  onChange={(e) => handleTextChange(e, editingIndex)}
+                  onBlur={handleTextBlur}
+                  autoFocus
+                  placeholder="Type text..."
+                  style={{
+                    position: 'absolute',
+                    left: objects[editingIndex].x * zoomLevel,
+                    top: (objects[editingIndex].y - 20) * zoomLevel,
+                    fontSize: `${20 * zoomLevel}px`,
+                    color: objects[editingIndex].color,
+                    background: 'rgba(255, 255, 255, 0.8)',
+                    border: '1px dashed blue',
+                    outline: 'none',
+                    resize: 'none',
+                    overflow: 'hidden',
+                    whiteSpace: 'pre',
+                    minWidth: '100px',
+                    minHeight: '1.2em',
+                    width: `${Math.max(100, (objects[editingIndex].text.length + 1) * 12 * zoomLevel)}px`,
+                    height: `${Math.max(30, 30 * zoomLevel)}px`,
+                    zIndex: 1000,
+                    padding: '2px',
+                    margin: 0,
+                    fontFamily: 'Arial',
+                    lineHeight: 1,
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                  }}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>
