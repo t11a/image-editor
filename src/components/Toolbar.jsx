@@ -1,8 +1,18 @@
 import React from 'react';
 
-const Toolbar = ({ onZoomIn, onZoomOut, onCopy, onDownload, onReset, zoomLevel }) => {
+const Toolbar = ({
+  onZoomIn,
+  onZoomOut,
+  onCopy,
+  onDownload,
+  onReset,
+  zoomLevel,
+}) => {
   return (
     <div className="toolbar">
+      <div className="toolbar-group">
+        <h1 className="app-title">Imaginator</h1>
+      </div>
       <div className="toolbar-group">
         <button onClick={onZoomOut} title="Zoom Out">
           -
@@ -13,7 +23,9 @@ const Toolbar = ({ onZoomIn, onZoomOut, onCopy, onDownload, onReset, zoomLevel }
         </button>
       </div>
       <div className="toolbar-group">
-        <button onClick={onReset} title="Reset Image">Reset</button>
+        <button onClick={onReset} title="Reset Image">
+          Reset
+        </button>
         <button onClick={onCopy} title="Copy to Clipboard">
           Copy
         </button>
