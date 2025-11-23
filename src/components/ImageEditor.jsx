@@ -39,6 +39,7 @@ const ImageEditor = forwardRef(
     const [loadedImage, setLoadedImage] = useState(null);
 
     const [isShiftPressed, setIsShiftPressed] = useState(false);
+    const [resizingHandle, setResizingHandle] = useState(null); // 'tl', 'tr', 'bl', 'br', 'start', 'end'
 
     // History for Undo/Redo
     const [history, setHistory] = useState([]);
@@ -68,6 +69,98 @@ const ImageEditor = forwardRef(
       setSelectedObjectIndex(null);
       setEditingIndex(null);
     }, [redoStack, objects]);
+
+    const getResizeHandles = (obj) => {
+      if (!obj) return {};
+      const handleSize = 8;
+      if (obj.type === 'rect' || obj.type === 'circle') {
+        return {
+          tl: {
+            x: obj.x - handleSize / 2,
+            y: obj.y - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          tr: {
+            x: obj.x + obj.width - handleSize / 2,
+            y: obj.y - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          bl: {
+            x: obj.x - handleSize / 2,
+            y: obj.y + obj.height - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          br: {
+            x: obj.x + obj.width - handleSize / 2,
+            y: obj.y + obj.height - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+        };
+      } else if (obj.type === 'text') {
+        const fontSize = obj.fontSize || 20;
+        const width = obj.text.length * (fontSize * 0.6);
+        const height = fontSize;
+        // Text handles: similar to rect but based on calculated bounds
+        // Bounds: x, y-height (top-left), width, height
+        const x = obj.x;
+        const y = obj.y - height;
+        return {
+          tl: {
+            x: x - handleSize / 2,
+            y: y - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          tr: {
+            x: x + width - handleSize / 2,
+            y: y - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          bl: {
+            x: x - handleSize / 2,
+            y: y + height - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          br: {
+            x: x + width - handleSize / 2,
+            y: y + height - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+        };
+      } else if (obj.type === 'arrow') {
+        return {
+          start: {
+            x: obj.sx - handleSize / 2,
+            y: obj.sy - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+          end: {
+            x: obj.ex - handleSize / 2,
+            y: obj.ey - handleSize / 2,
+            w: handleSize,
+            h: handleSize,
+          },
+        };
+      }
+      return {};
+    };
+
+    const isPointInHandle = (x, y, handle) => {
+      return (
+        x >= handle.x &&
+        x <= handle.x + handle.w &&
+        y >= handle.y &&
+        y <= handle.y + handle.h
+      );
+    };
 
     const isPointInObject = (x, y, obj) => {
       if (obj.type === 'rect') {
@@ -211,14 +304,25 @@ const ImageEditor = forwardRef(
               height + 10
             );
           } else if (obj.type === 'arrow') {
-            ctx.fillStyle = 'blue';
-            ctx.fillRect(obj.sx - 5, obj.sy - 5, 10, 10);
-            ctx.fillRect(obj.ex - 5, obj.ey - 5, 10, 10);
+            // Arrow selection is just handles usually, but let's keep dashed line if needed?
+            // Actually arrow selection box is tricky. Let's rely on handles.
           } else if (obj.type === 'pen') {
             // Bounding box for pen? Too expensive to calc every frame?
             // Just highlight start/end for now or skip
           }
           ctx.restore();
+
+          // Draw resize handles
+          const handles = getResizeHandles(obj);
+          ctx.fillStyle = 'white';
+          ctx.strokeStyle = 'blue';
+          ctx.lineWidth = 1;
+          Object.values(handles).forEach((handle) => {
+            ctx.beginPath();
+            ctx.rect(handle.x, handle.y, handle.w, handle.h);
+            ctx.fill();
+            ctx.stroke();
+          });
         }
       };
 
@@ -433,6 +537,19 @@ const ImageEditor = forwardRef(
       const { x, y } = getCanvasCoordinates(e);
 
       if (currentTool === 'select') {
+        // Check for resize handles first
+        if (selectedObjectIndex !== null) {
+          const handles = getResizeHandles(objects[selectedObjectIndex]);
+          for (const [key, handle] of Object.entries(handles)) {
+            if (isPointInHandle(x, y, handle)) {
+              setResizingHandle(key);
+              setDragOffset({ x, y }); // Store initial click pos for resizing
+              saveHistory();
+              return;
+            }
+          }
+        }
+
         let clickedIndex = null;
         for (let i = objects.length - 1; i >= 0; i--) {
           if (isPointInObject(x, y, objects[i])) {
@@ -521,42 +638,117 @@ const ImageEditor = forwardRef(
     const handleMouseMove = (e) => {
       const { x, y } = getCanvasCoordinates(e);
 
-      if (
-        currentTool === 'select' &&
-        selectedObjectIndex !== null &&
-        dragOffset
-      ) {
-        // We need to save history before starting drag... but drag is continuous.
-        // Ideally save history on MouseDown if we are about to drag?
-        // Or save on MouseUp if position changed?
-        // For simplicity, let's just update state. Real undo for drag needs "drag start" snapshot.
+      if (currentTool === 'select' && selectedObjectIndex !== null) {
+        if (resizingHandle) {
+          const updatedObjects = [...objects];
+          const obj = { ...updatedObjects[selectedObjectIndex] };
 
-        const updatedObjects = [...objects];
-        const obj = { ...updatedObjects[selectedObjectIndex] };
+          if (obj.type === 'rect' || obj.type === 'circle') {
+            if (resizingHandle === 'br') {
+              let newW = x - obj.x;
+              let newH = y - obj.y;
+              if (isShiftPressed) {
+                const size = Math.max(Math.abs(newW), Math.abs(newH));
+                newW = newW < 0 ? -size : size;
+                newH = newH < 0 ? -size : size;
+              }
+              obj.width = newW;
+              obj.height = newH;
+            } else if (resizingHandle === 'bl') {
+              const oldRight = obj.x + obj.width;
+              let newW = oldRight - x;
+              let newH = y - obj.y;
+              if (isShiftPressed) {
+                const size = Math.max(Math.abs(newW), Math.abs(newH));
+                newW = newW < 0 ? -size : size;
+                newH = newH < 0 ? -size : size;
+              }
+              obj.x = oldRight - newW;
+              obj.width = newW;
+              obj.height = newH;
+            } else if (resizingHandle === 'tr') {
+              const oldBottom = obj.y + obj.height;
+              let newW = x - obj.x;
+              let newH = oldBottom - y;
+              if (isShiftPressed) {
+                const size = Math.max(Math.abs(newW), Math.abs(newH));
+                newW = newW < 0 ? -size : size;
+                newH = newH < 0 ? -size : size;
+              }
+              obj.y = oldBottom - newH;
+              obj.height = newH;
+              obj.width = newW;
+            } else if (resizingHandle === 'tl') {
+              const oldRight = obj.x + obj.width;
+              const oldBottom = obj.y + obj.height;
+              let newW = oldRight - x;
+              let newH = oldBottom - y;
+              if (isShiftPressed) {
+                const size = Math.max(Math.abs(newW), Math.abs(newH));
+                newW = newW < 0 ? -size : size;
+                newH = newH < 0 ? -size : size;
+              }
+              obj.x = oldRight - newW;
+              obj.y = oldBottom - newH;
+              obj.width = newW;
+              obj.height = newH;
+            }
+          } else if (obj.type === 'arrow') {
+            if (resizingHandle === 'start') {
+              obj.sx = x;
+              obj.sy = y;
+            } else if (resizingHandle === 'end') {
+              obj.ex = x;
+              obj.ey = y;
+            }
+          } else if (obj.type === 'text') {
+            // Simple text scaling: distance from center or just drag corner to scale font size
+            // Let's implement 'br' handle scaling for simplicity
+            if (resizingHandle === 'br') {
+              // Calculate new font size based on height change?
+              // Initial height was ~fontSize. New height is y - (obj.y - fontSize) ?
+              // Let's just use distance from top-left (obj.x, obj.y - fontSize)
+              const topY = obj.y - (obj.fontSize || 20);
+              const newHeight = y - topY;
+              if (newHeight > 5) {
+                obj.fontSize = newHeight;
+              }
+            }
+          }
 
-        if (
-          obj.type === 'rect' ||
-          obj.type === 'text' ||
-          obj.type === 'circle'
-        ) {
-          obj.x = x - dragOffset.x;
-          obj.y = y - dragOffset.y;
-        } else if (obj.type === 'arrow') {
-          const width = obj.ex - obj.sx;
-          const height = obj.ey - obj.sy;
-          obj.sx = x - dragOffset.dx;
-          obj.sy = y - dragOffset.dy;
-          obj.ex = obj.sx + width;
-          obj.ey = obj.sy + height;
-        } else if (obj.type === 'pen' && dragOffset.type === 'pen') {
-          // Move all points
-          const dx = x - dragOffset.x - obj.points[0].x;
-          const dy = y - dragOffset.y - obj.points[0].y;
-          obj.points = obj.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+          updatedObjects[selectedObjectIndex] = obj;
+          setObjects(updatedObjects);
+          return;
         }
-        updatedObjects[selectedObjectIndex] = obj;
-        setObjects(updatedObjects);
-        return;
+
+        if (dragOffset) {
+          const updatedObjects = [...objects];
+          const obj = { ...updatedObjects[selectedObjectIndex] };
+
+          if (
+            obj.type === 'rect' ||
+            obj.type === 'text' ||
+            obj.type === 'circle'
+          ) {
+            obj.x = x - dragOffset.x;
+            obj.y = y - dragOffset.y;
+          } else if (obj.type === 'arrow') {
+            const width = obj.ex - obj.sx;
+            const height = obj.ey - obj.sy;
+            obj.sx = x - dragOffset.dx;
+            obj.sy = y - dragOffset.dy;
+            obj.ex = obj.sx + width;
+            obj.ey = obj.sy + height;
+          } else if (obj.type === 'pen' && dragOffset.type === 'pen') {
+            // Move all points
+            const dx = x - dragOffset.x - obj.points[0].x;
+            const dy = y - dragOffset.y - obj.points[0].y;
+            obj.points = obj.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+          }
+          updatedObjects[selectedObjectIndex] = obj;
+          setObjects(updatedObjects);
+          return;
+        }
       }
 
       if (!drawingStart) return;
@@ -569,11 +761,7 @@ const ImageEditor = forwardRef(
 
     const handleMouseUp = (e) => {
       if (currentTool === 'select') {
-        if (dragOffset) {
-          // If we dragged, we should probably save history?
-          // But we didn't save before drag.
-          // Let's skip complex drag-undo for now to keep it simple, or implement "drag start" tracking.
-        }
+        setResizingHandle(null);
         setDragOffset(null);
         return;
       }
