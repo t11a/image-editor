@@ -41,7 +41,7 @@ const Toolbar = ({
   return (
     <div className="toolbar">
       <div className="toolbar-group">
-        <h1 className="app-title">Imaginator</h1>
+        <h1 className="app-title">SnapEdit</h1>
       </div>
       <div className="toolbar-group">
         <button onClick={onReset} title="Reset Image">
