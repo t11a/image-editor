@@ -274,6 +274,23 @@ const ImageEditor = forwardRef(
       }
     }, [fontSize, selectedObjectIndex, objects]);
 
+    // Update stroke width of selected object when strokeWidth prop changes
+    useEffect(() => {
+      if (selectedObjectIndex !== null && objects[selectedObjectIndex]) {
+        const obj = objects[selectedObjectIndex];
+        if (['rect', 'circle', 'arrow', 'pen'].includes(obj.type)) {
+          if (obj.strokeWidth !== strokeWidth) {
+            const updatedObjects = [...objects];
+            updatedObjects[selectedObjectIndex] = {
+              ...updatedObjects[selectedObjectIndex],
+              strokeWidth: strokeWidth,
+            };
+            setObjects(updatedObjects);
+          }
+        }
+      }
+    }, [strokeWidth, selectedObjectIndex, objects]);
+
     useEffect(() => {
       const handleKeyDown = (e) => {
         if (e.key === 'Shift') {

@@ -30,8 +30,13 @@ function App() {
   }, []);
 
   const handleObjectSelect = useCallback((obj) => {
-    if (obj && obj.type === 'text' && obj.fontSize) {
-      setFontSize(obj.fontSize);
+    if (obj) {
+      if (obj.type === 'text' && obj.fontSize) {
+        setFontSize(obj.fontSize);
+      }
+      if (obj.strokeWidth) {
+        setStrokeWidth(obj.strokeWidth);
+      }
     }
   }, []);
 
