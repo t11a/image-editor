@@ -35,6 +35,7 @@ const ImageEditor = forwardRef(
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const isAddingText = useRef(false);
+    const clipboard = useRef(null);
 
     const [selectedObjectIndex, setSelectedObjectIndex] = useState(null);
     const [dragOffset, setDragOffset] = useState(null);
@@ -328,6 +329,40 @@ const ImageEditor = forwardRef(
             undo();
           }
           e.preventDefault();
+        }
+
+        // Copy
+        if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+          if (selectedObjectIndex !== null && objects[selectedObjectIndex]) {
+            clipboard.current = JSON.parse(
+              JSON.stringify(objects[selectedObjectIndex])
+            );
+            e.preventDefault();
+          }
+        }
+
+        // Paste
+        if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+          if (clipboard.current) {
+            saveHistory();
+            const newObj = JSON.parse(JSON.stringify(clipboard.current));
+            newObj.x += 20;
+            newObj.y += 20;
+            if (newObj.type === 'arrow') {
+              newObj.sx += 20;
+              newObj.sy += 20;
+              newObj.ex += 20;
+              newObj.ey += 20;
+            } else if (newObj.type === 'pen') {
+              newObj.points = newObj.points.map((p) => ({
+                x: p.x + 20,
+                y: p.y + 20,
+              }));
+            }
+            setObjects((prev) => [...prev, newObj]);
+            setSelectedObjectIndex(objects.length);
+            e.preventDefault();
+          }
         }
       };
 
