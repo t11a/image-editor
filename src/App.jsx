@@ -8,7 +8,7 @@ function App() {
   const [currentTool, setCurrentTool] = useState('select');
   const [currentColor, setCurrentColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(3);
-  const [fontSize, setFontSize] = useState(20);
+  const [fontSize, setFontSize] = useState(30);
   const imageEditorRef = useRef(null);
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 3));
