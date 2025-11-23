@@ -7,6 +7,17 @@
   background-color: #242424;
 }
 
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+button.active {
+  border-color: #646cff;
+  background-color: #333;
+  color: #fff;
+}
+
 body {
   margin: 0;
   display: flex;
@@ -60,8 +71,6 @@ body {
 }
 
 canvas {
-  max-width: 100%;
-  height: auto;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
   transition: transform 0.2s ease-out;
 }
