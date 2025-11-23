@@ -38,6 +38,8 @@ const ImageEditor = forwardRef(
     const [editingIndex, setEditingIndex] = useState(null);
     const [loadedImage, setLoadedImage] = useState(null);
 
+    const [isShiftPressed, setIsShiftPressed] = useState(false);
+
     // History for Undo/Redo
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
@@ -231,22 +233,36 @@ const ImageEditor = forwardRef(
         };
 
         if (currentTool === 'rect' && currentDragPos) {
+          let width = currentDragPos.x - drawingStart.x;
+          let height = currentDragPos.y - drawingStart.y;
+          if (isShiftPressed) {
+            const size = Math.max(Math.abs(width), Math.abs(height));
+            width = width < 0 ? -size : size;
+            height = height < 0 ? -size : size;
+          }
           drawShape({
             ...previewObj,
             type: 'rect',
             x: drawingStart.x,
             y: drawingStart.y,
-            width: currentDragPos.x - drawingStart.x,
-            height: currentDragPos.y - drawingStart.y,
+            width: width,
+            height: height,
           });
         } else if (currentTool === 'circle' && currentDragPos) {
+          let width = currentDragPos.x - drawingStart.x;
+          let height = currentDragPos.y - drawingStart.y;
+          if (isShiftPressed) {
+            const size = Math.max(Math.abs(width), Math.abs(height));
+            width = width < 0 ? -size : size;
+            height = height < 0 ? -size : size;
+          }
           drawShape({
             ...previewObj,
             type: 'circle',
             x: drawingStart.x,
             y: drawingStart.y,
-            width: currentDragPos.x - drawingStart.x,
-            height: currentDragPos.y - drawingStart.y,
+            width: width,
+            height: height,
           });
         } else if (currentTool === 'arrow' && currentDragPos) {
           drawShape({
@@ -277,6 +293,7 @@ const ImageEditor = forwardRef(
       editingIndex,
       strokeWidth,
       fontSize,
+      isShiftPressed,
     ]);
 
     useEffect(() => {
@@ -303,6 +320,10 @@ const ImageEditor = forwardRef(
 
     useEffect(() => {
       const handleKeyDown = (e) => {
+        if (e.key === 'Shift') {
+          setIsShiftPressed(true);
+        }
+
         if (editingIndex !== null) return; // Don't handle delete/undo while editing text
 
         if (
@@ -325,8 +346,19 @@ const ImageEditor = forwardRef(
           e.preventDefault();
         }
       };
+
+      const handleKeyUp = (e) => {
+        if (e.key === 'Shift') {
+          setIsShiftPressed(false);
+        }
+      };
+
       window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
     }, [selectedObjectIndex, objects, saveHistory, undo, redo, editingIndex]);
 
     useImperativeHandle(ref, () => ({
@@ -558,26 +590,40 @@ const ImageEditor = forwardRef(
       };
 
       if (currentTool === 'rect') {
+        let width = x - drawingStart.x;
+        let height = y - drawingStart.y;
+        if (e.shiftKey) {
+          const size = Math.max(Math.abs(width), Math.abs(height));
+          width = width < 0 ? -size : size;
+          height = height < 0 ? -size : size;
+        }
         setObjects([
           ...objects,
           {
             type: 'rect',
             x: drawingStart.x,
             y: drawingStart.y,
-            width: x - drawingStart.x,
-            height: y - drawingStart.y,
+            width: width,
+            height: height,
             ...commonProps,
           },
         ]);
       } else if (currentTool === 'circle') {
+        let width = x - drawingStart.x;
+        let height = y - drawingStart.y;
+        if (e.shiftKey) {
+          const size = Math.max(Math.abs(width), Math.abs(height));
+          width = width < 0 ? -size : size;
+          height = height < 0 ? -size : size;
+        }
         setObjects([
           ...objects,
           {
             type: 'circle',
             x: drawingStart.x,
             y: drawingStart.y,
-            width: x - drawingStart.x,
-            height: y - drawingStart.y,
+            width: width,
+            height: height,
             ...commonProps,
           },
         ]);
