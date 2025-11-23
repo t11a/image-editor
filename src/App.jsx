@@ -46,6 +46,17 @@ function App() {
     }
   }, []);
 
+  const handleCrop = () => {
+    if (imageEditorRef.current) {
+      imageEditorRef.current.applyCrop();
+      setCurrentTool('select');
+    }
+  };
+
+  const handleCropCancel = () => {
+    setCurrentTool('select');
+  };
+
   return (
     <div className="app-container">
       <Toolbar
@@ -65,6 +76,8 @@ function App() {
         onWidthChange={setStrokeWidth}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
+        onCrop={handleCrop}
+        onCropCancel={handleCropCancel}
       />
       <ImageEditor
         ref={imageEditorRef}

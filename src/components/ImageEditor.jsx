@@ -47,6 +47,20 @@ const ImageEditor = forwardRef(
 
     const [isShiftPressed, setIsShiftPressed] = useState(false);
     const [resizingHandle, setResizingHandle] = useState(null); // 'tl', 'tr', 'bl', 'br', 'start', 'end'
+    const [cropRect, setCropRect] = useState(null);
+
+    useEffect(() => {
+      if (currentTool === 'crop' && imgDimensions.width > 0) {
+        setCropRect({
+          x: 0,
+          y: 0,
+          width: imgDimensions.width,
+          height: imgDimensions.height,
+        });
+      } else {
+        setCropRect(null);
+      }
+    }, [currentTool, imgDimensions]);
 
     // History for Undo/Redo
     const {
@@ -430,6 +444,59 @@ const ImageEditor = forwardRef(
         setSelectedObjectIndex(null);
         setEditingIndex(null);
       },
+      applyCrop: () => {
+        if (!loadedImage || !cropRect) return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = cropRect.width;
+        canvas.height = cropRect.height;
+
+        // Draw cropped image
+        ctx.drawImage(
+          loadedImage,
+          cropRect.x,
+          cropRect.y,
+          cropRect.width,
+          cropRect.height,
+          0,
+          0,
+          cropRect.width,
+          cropRect.height
+        );
+
+        const newImageSrc = canvas.toDataURL();
+        setImageSrc(newImageSrc);
+        setImgDimensions({ width: cropRect.width, height: cropRect.height });
+
+        // Shift objects
+        const newObjects = objects.map((obj) => {
+          const newObj = { ...obj };
+          if (
+            newObj.type === 'rect' ||
+            newObj.type === 'circle' ||
+            newObj.type === 'text'
+          ) {
+            newObj.x -= cropRect.x;
+            newObj.y -= cropRect.y;
+          } else if (newObj.type === 'arrow') {
+            newObj.sx -= cropRect.x;
+            newObj.sy -= cropRect.y;
+            newObj.ex -= cropRect.x;
+            newObj.ey -= cropRect.y;
+          } else if (newObj.type === 'pen') {
+            newObj.points = newObj.points.map((p) => ({
+              x: p.x - cropRect.x,
+              y: p.y - cropRect.y,
+            }));
+          }
+          return newObj;
+        });
+
+        setObjects(newObjects);
+        saveHistoryState(newObjects); // Save history manually as objects changed
+        setCropRect(null);
+      },
       undo,
       redo,
       hasImage: () => !!imageSrc,
@@ -446,9 +513,36 @@ const ImageEditor = forwardRef(
       };
     };
 
-    const handleMouseDown = (e) => {
+    const handleMouseDown = (e, handleId = null) => {
       if (!imageSrc) return;
       const { x, y } = getCanvasCoordinates(e);
+
+      if (currentTool === 'crop' && cropRect) {
+        if (handleId) {
+          setResizingHandle(handleId);
+          setDragOffset({ x, y });
+          return;
+        }
+
+        const handles = getResizeHandles({ ...cropRect, type: 'rect' });
+        for (const [key, handle] of Object.entries(handles)) {
+          if (isPointInHandle(x, y, handle)) {
+            setResizingHandle(key);
+            setDragOffset({ x, y });
+            return;
+          }
+        }
+        if (
+          x >= cropRect.x &&
+          x <= cropRect.x + cropRect.width &&
+          y >= cropRect.y &&
+          y <= cropRect.y + cropRect.height
+        ) {
+          setIsDragging(true);
+          setDragOffset({ x: x - cropRect.x, y: y - cropRect.y });
+        }
+        return;
+      }
 
       if (currentTool === 'select') {
         // Check for resize handles first
@@ -551,6 +645,44 @@ const ImageEditor = forwardRef(
 
     const handleMouseMove = (e) => {
       const { x, y } = getCanvasCoordinates(e);
+
+      if (currentTool === 'crop' && cropRect) {
+        if (resizingHandle) {
+          let newRect = { ...cropRect };
+          if (resizingHandle === 'br') {
+            newRect.width = x - newRect.x;
+            newRect.height = y - newRect.y;
+          } else if (resizingHandle === 'bl') {
+            const oldRight = newRect.x + newRect.width;
+            newRect.x = x;
+            newRect.width = oldRight - x;
+            newRect.height = y - newRect.y;
+          } else if (resizingHandle === 'tr') {
+            const oldBottom = newRect.y + newRect.height;
+            newRect.y = y;
+            newRect.height = oldBottom - y;
+            newRect.width = x - newRect.x;
+          } else if (resizingHandle === 'tl') {
+            const oldRight = newRect.x + newRect.width;
+            const oldBottom = newRect.y + newRect.height;
+            newRect.x = x;
+            newRect.y = y;
+            newRect.width = oldRight - x;
+            newRect.height = oldBottom - y;
+          }
+          // Constrain minimum size
+          if (newRect.width < 10) newRect.width = 10;
+          if (newRect.height < 10) newRect.height = 10;
+          setCropRect(newRect);
+        } else if (isDragging) {
+          setCropRect({
+            ...cropRect,
+            x: x - dragOffset.x,
+            y: y - dragOffset.y,
+          });
+        }
+        return;
+      }
 
       if (currentTool === 'select' && selectedObjectIndex !== null) {
         if (resizingHandle) {
@@ -698,6 +830,13 @@ const ImageEditor = forwardRef(
     };
 
     const handleMouseUp = (e) => {
+      if (currentTool === 'crop') {
+        setResizingHandle(null);
+        setIsDragging(false);
+        setDragOffset(null);
+        return;
+      }
+
       if (currentTool === 'select') {
         setResizingHandle(null);
         setDragOffset(null);
@@ -978,6 +1117,66 @@ const ImageEditor = forwardRef(
                     boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
                   }}
                 />
+              )}
+              {currentTool === 'crop' && cropRect && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: cropRect.x * zoomLevel,
+                    top: cropRect.y * zoomLevel,
+                    width: cropRect.width * zoomLevel,
+                    height: cropRect.height * zoomLevel,
+                    border: '2px dashed white',
+                    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+                    pointerEvents: 'auto',
+                    cursor: 'move',
+                  }}
+                  onMouseDown={(e) => {
+                    // We need to handle mouse down here to start dragging the crop rect
+                    // But our current logic is in canvas.onMouseDown.
+                    // Let's forward the event or handle it here.
+                    // If we handle it here, we need to adapt handleMouseDown.
+                    // For now, let's just let it bubble? No, it's a sibling or child of wrapper.
+                    // It is a sibling of canvas.
+                    // If we click here, canvas.onMouseDown won't fire.
+                    // So we MUST handle it here.
+                    handleMouseDown(e);
+                  }}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                >
+                  {/* Handles */}
+                  {['tl', 'tr', 'bl', 'br'].map((handle) => (
+                    <div
+                      key={handle}
+                      style={{
+                        position: 'absolute',
+                        width: '10px',
+                        height: '10px',
+                        background: 'white',
+                        border: '1px solid black',
+                        top: handle.includes('t') ? '-5px' : 'calc(100% - 5px)',
+                        left: handle.includes('l')
+                          ? '-5px'
+                          : 'calc(100% - 5px)',
+                        cursor:
+                          handle === 'tl' || handle === 'br'
+                            ? 'nwse-resize'
+                            : 'nesw-resize',
+                        pointerEvents: 'auto',
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation(); // Don't trigger drag move
+                        // We need to trigger resize.
+                        // We can call handleMouseDown but we need to make sure it detects the handle.
+                        // Our handle detection logic relies on coordinates.
+                        // If we pass the event, getCanvasCoordinates will calculate pos relative to canvas.
+                        // Since this overlay is exactly over the crop rect on canvas, the coords should match.
+                        handleMouseDown(e, handle);
+                      }}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           </div>
