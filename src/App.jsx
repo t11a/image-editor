@@ -29,6 +29,12 @@ function App() {
     setZoomLevel(scale);
   }, []);
 
+  const handleObjectSelect = useCallback((obj) => {
+    if (obj && obj.type === 'text' && obj.fontSize) {
+      setFontSize(obj.fontSize);
+    }
+  }, []);
+
   return (
     <div className="app-container">
       <Toolbar
@@ -57,6 +63,7 @@ function App() {
         strokeWidth={strokeWidth}
         fontSize={fontSize}
         onImageLoad={handleImageLoad}
+        onObjectSelect={handleObjectSelect}
       />
     </div>
   );

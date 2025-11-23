@@ -77,13 +77,6 @@ const Toolbar = ({
         >
           Pen
         </button>
-        <button
-          className={currentTool === 'text' ? 'active' : ''}
-          onClick={() => onToolChange('text')}
-          title="Text Tool"
-        >
-          Text
-        </button>
         <div
           className="separator"
           style={{
@@ -113,19 +106,36 @@ const Toolbar = ({
           value={strokeWidth}
           onChange={(e) => onWidthChange(parseInt(e.target.value))}
           title={`Stroke Width: ${strokeWidth}px`}
-          style={{ width: '80px' }}
+          style={{ width: '80px', marginRight: '10px' }}
         />
-        {currentTool === 'text' && (
-          <input
-            type="number"
-            min="10"
-            max="100"
-            value={fontSize}
-            onChange={(e) => onFontSizeChange(parseInt(e.target.value))}
-            title={`Font Size: ${fontSize}px`}
-            style={{ width: '60px', marginLeft: '10px' }}
-          />
-        )}
+        <button
+          className={currentTool === 'text' ? 'active' : ''}
+          onClick={() => onToolChange('text')}
+          title="Text Tool"
+        >
+          Text
+        </button>
+        <input
+          type="number"
+          min="10"
+          max="100"
+          value={fontSize || ''}
+          onChange={(e) => {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val)) {
+              onFontSizeChange(Math.max(10, val));
+            } else {
+              onFontSizeChange(0); // Or handle empty state differently if needed, but 0/empty allows typing
+            }
+          }}
+          onBlur={() => {
+            if (!fontSize || fontSize < 10) {
+              onFontSizeChange(10);
+            }
+          }}
+          title={`Font Size: ${fontSize}px`}
+          style={{ width: '60px', marginLeft: '10px' }}
+        />
       </div>
       <div className="toolbar-group">
         <button onClick={onZoomOut} title="Zoom Out">

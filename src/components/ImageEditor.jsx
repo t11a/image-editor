@@ -16,6 +16,7 @@ const ImageEditor = forwardRef(
       currentColor,
       strokeWidth,
       fontSize,
+      onObjectSelect,
     },
     ref
   ) => {
@@ -282,6 +283,24 @@ const ImageEditor = forwardRef(
       renderCanvas();
     }, [renderCanvas]);
 
+    // Update font size of selected text object when fontSize prop changes
+    useEffect(() => {
+      if (
+        selectedObjectIndex !== null &&
+        objects[selectedObjectIndex] &&
+        objects[selectedObjectIndex].type === 'text'
+      ) {
+        if (objects[selectedObjectIndex].fontSize !== fontSize) {
+          const updatedObjects = [...objects];
+          updatedObjects[selectedObjectIndex] = {
+            ...updatedObjects[selectedObjectIndex],
+            fontSize: fontSize,
+          };
+          setObjects(updatedObjects);
+        }
+      }
+    }, [fontSize, selectedObjectIndex, objects]);
+
     useEffect(() => {
       const handleKeyDown = (e) => {
         if (editingIndex !== null) return; // Don't handle delete/undo while editing text
@@ -392,6 +411,9 @@ const ImageEditor = forwardRef(
         setSelectedObjectIndex(clickedIndex);
         if (clickedIndex !== null) {
           const obj = objects[clickedIndex];
+          if (onObjectSelect) {
+            onObjectSelect(obj);
+          }
           if (
             obj.type === 'rect' ||
             obj.type === 'text' ||
