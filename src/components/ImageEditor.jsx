@@ -25,6 +25,7 @@ const ImageEditor = forwardRef(
     const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
 
     const [editingIndex, setEditingIndex] = useState(null);
+    const [loadedImage, setLoadedImage] = useState(null);
 
     // History for Undo/Redo
     const [history, setHistory] = useState([]);
@@ -118,10 +119,8 @@ const ImageEditor = forwardRef(
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (imageSrc) {
-        const img = new Image();
-        img.src = imageSrc;
-        ctx.drawImage(img, 0, 0);
+      if (loadedImage) {
+        ctx.drawImage(loadedImage, 0, 0);
       }
 
       const drawShape = (obj, index) => {
@@ -253,16 +252,16 @@ const ImageEditor = forwardRef(
         }
       }
     }, [
-      imageSrc,
       objects,
       drawingStart,
       currentDragPos,
       currentTool,
       selectedObjectIndex,
-      currentPath,
+      loadedImage,
       currentColor,
-      strokeWidth,
+      currentPath,
       editingIndex,
+      strokeWidth,
     ]);
 
     useEffect(() => {
@@ -647,12 +646,10 @@ const ImageEditor = forwardRef(
     }, []);
 
     useEffect(() => {
-      if (imageSrc && canvasRef.current) {
-        const canvas = canvasRef.current;
+      if (imageSrc) {
         const img = new Image();
         img.onload = () => {
-          canvas.width = img.width;
-          canvas.height = img.height;
+          setLoadedImage(img);
           setImgDimensions({ width: img.width, height: img.height });
 
           // Calculate scale to fit
@@ -663,12 +660,29 @@ const ImageEditor = forwardRef(
             const scale = Math.min(scaleX, scaleY, 1);
             onImageLoad(Math.floor(scale * 10) / 10 || 0.1);
           }
-
-          renderCanvas();
         };
         img.src = imageSrc;
+      } else {
+        setLoadedImage(null);
       }
-    }, [imageSrc, renderCanvas, onImageLoad]);
+    }, [imageSrc, onImageLoad]);
+
+    // Effect for resizing canvas (only when dimensions change)
+    useEffect(() => {
+      if (
+        canvasRef.current &&
+        imgDimensions.width > 0 &&
+        imgDimensions.height > 0
+      ) {
+        canvasRef.current.width = imgDimensions.width;
+        canvasRef.current.height = imgDimensions.height;
+      }
+    }, [imgDimensions]);
+
+    // Effect for rendering (when renderCanvas changes, e.g. tool change, or loadedImage changes)
+    useEffect(() => {
+      renderCanvas();
+    }, [renderCanvas, loadedImage]);
 
     return (
       <div

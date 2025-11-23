@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import ImageEditor from './components/ImageEditor';
 import Toolbar from './components/Toolbar';
 import './App.css';
@@ -24,9 +24,9 @@ function App() {
     }
   };
 
-  const handleImageLoad = (scale) => {
+  const handleImageLoad = useCallback((scale) => {
     setZoomLevel(scale);
-  };
+  }, []);
 
   return (
     <div className="app-container">
