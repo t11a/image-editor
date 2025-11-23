@@ -41,6 +41,11 @@ const Toolbar = ({
   return (
     <div className="toolbar">
       <div className="toolbar-group">
+        <img
+          src="/favicon.png"
+          alt="SnapEdit Logo"
+          style={{ height: '48px', marginRight: '10px' }}
+        />
         <h1 className="app-title">SnapEdit</h1>
       </div>
       <div className="toolbar-group">
