@@ -19,9 +19,15 @@ function App() {
   const handleRedo = () => imageEditorRef.current?.redo();
 
   const handleReset = () => {
-    if (imageEditorRef.current) {
-      imageEditorRef.current.resetImage();
-      setZoomLevel(1);
+    if (
+      window.confirm(
+        'Are you sure you want to reset? All changes will be lost.'
+      )
+    ) {
+      if (imageEditorRef.current) {
+        imageEditorRef.current.resetImage();
+        setZoomLevel(1);
+      }
     }
   };
 

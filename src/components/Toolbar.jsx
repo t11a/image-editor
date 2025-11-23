@@ -1,4 +1,19 @@
 import React from 'react';
+import {
+  RotateCcw,
+  Undo,
+  Redo,
+  MousePointer2,
+  Square,
+  Circle,
+  ArrowRight,
+  Pen,
+  Type,
+  Minus,
+  Plus,
+  Copy,
+  Download,
+} from 'lucide-react';
 
 const Toolbar = ({
   onZoomIn,
@@ -25,13 +40,13 @@ const Toolbar = ({
       </div>
       <div className="toolbar-group">
         <button onClick={onReset} title="Reset Image">
-          Reset
+          <RotateCcw size={20} />
         </button>
         <button onClick={onUndo} title="Undo">
-          Undo
+          <Undo size={20} />
         </button>
         <button onClick={onRedo} title="Redo">
-          Redo
+          <Redo size={20} />
         </button>
         <div
           className="separator"
@@ -47,35 +62,35 @@ const Toolbar = ({
           onClick={() => onToolChange('select')}
           title="Select Tool"
         >
-          Select
+          <MousePointer2 size={20} />
         </button>
         <button
           className={currentTool === 'rect' ? 'active' : ''}
           onClick={() => onToolChange('rect')}
           title="Rectangle Tool"
         >
-          Rect
+          <Square size={20} />
         </button>
         <button
           className={currentTool === 'circle' ? 'active' : ''}
           onClick={() => onToolChange('circle')}
           title="Circle Tool"
         >
-          Circle
+          <Circle size={20} />
         </button>
         <button
           className={currentTool === 'arrow' ? 'active' : ''}
           onClick={() => onToolChange('arrow')}
           title="Arrow Tool"
         >
-          Arrow
+          <ArrowRight size={20} />
         </button>
         <button
           className={currentTool === 'pen' ? 'active' : ''}
           onClick={() => onToolChange('pen')}
           title="Pen Tool"
         >
-          Pen
+          <Pen size={20} />
         </button>
         <div
           className="separator"
@@ -97,6 +112,7 @@ const Toolbar = ({
             padding: 0,
             border: 'none',
             background: 'none',
+            cursor: 'pointer',
           }}
         />
         <input
@@ -113,7 +129,7 @@ const Toolbar = ({
           onClick={() => onToolChange('text')}
           title="Text Tool"
         >
-          Text
+          <Type size={20} />
         </button>
         <input
           type="number"
@@ -125,7 +141,7 @@ const Toolbar = ({
             if (!isNaN(val)) {
               onFontSizeChange(Math.max(10, val));
             } else {
-              onFontSizeChange(0); // Or handle empty state differently if needed, but 0/empty allows typing
+              onFontSizeChange(0);
             }
           }}
           onBlur={() => {
@@ -139,17 +155,17 @@ const Toolbar = ({
       </div>
       <div className="toolbar-group">
         <button onClick={onZoomOut} title="Zoom Out">
-          -
+          <Minus size={20} />
         </button>
         <span className="zoom-level">{Math.round(zoomLevel * 100)}%</span>
         <button onClick={onZoomIn} title="Zoom In">
-          +
+          <Plus size={20} />
         </button>
         <button onClick={onCopy} title="Copy to Clipboard">
-          Copy
+          <Copy size={20} />
         </button>
         <button onClick={onDownload} title="Download Image">
-          Download
+          <Download size={20} />
         </button>
       </div>
     </div>
