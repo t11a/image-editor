@@ -3,7 +3,7 @@ import {
   RotateCcw,
   Undo,
   Redo,
-  MousePointer2,
+  Hand,
   Square,
   Circle,
   ArrowRight,
@@ -62,7 +62,7 @@ const Toolbar = ({
           onClick={() => onToolChange('select')}
           title="Select Tool"
         >
-          <MousePointer2 size={20} />
+          <Hand size={20} />
         </button>
         <button
           className={currentTool === 'rect' ? 'active' : ''}
