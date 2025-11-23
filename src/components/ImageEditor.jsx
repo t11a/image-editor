@@ -11,6 +11,9 @@ import {
   isPointInHandle,
   isPointInObject,
 } from '../utils/shapeUtils';
+import { drawShape } from '../utils/renderUtils';
+import CropOverlay from './CropOverlay';
+import TextEditor from './TextEditor';
 import useHistory from '../hooks/useHistory';
 
 const ImageEditor = forwardRef(
@@ -47,6 +50,20 @@ const ImageEditor = forwardRef(
 
     const [isShiftPressed, setIsShiftPressed] = useState(false);
     const [resizingHandle, setResizingHandle] = useState(null); // 'tl', 'tr', 'bl', 'br', 'start', 'end'
+    const [cropRect, setCropRect] = useState(null);
+
+    useEffect(() => {
+      if (currentTool === 'crop' && imgDimensions.width > 0) {
+        setCropRect({
+          x: 0,
+          y: 0,
+          width: imgDimensions.width,
+          height: imgDimensions.height,
+        });
+      } else {
+        setCropRect(null);
+      }
+    }, [currentTool, imgDimensions]);
 
     // History for Undo/Redo
     const {
@@ -83,103 +100,13 @@ const ImageEditor = forwardRef(
         ctx.drawImage(loadedImage, 0, 0);
       }
 
-      const drawShape = (obj, index) => {
-        // Skip rendering text if it's being edited
-        if (index === editingIndex && obj.type === 'text') return;
+      if (loadedImage) {
+        ctx.drawImage(loadedImage, 0, 0);
+      }
 
-        ctx.beginPath();
-        ctx.strokeStyle = obj.color || 'red';
-        ctx.lineWidth = obj.strokeWidth || 3;
-        ctx.fillStyle = obj.color || 'red';
-        ctx.font = `${obj.fontSize || 20}px Arial`;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        if (obj.type === 'rect') {
-          ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
-        } else if (obj.type === 'circle') {
-          ctx.beginPath();
-          const radiusX = Math.abs(obj.width / 2);
-          const radiusY = Math.abs(obj.height / 2);
-          const centerX = obj.x + obj.width / 2;
-          const centerY = obj.y + obj.height / 2;
-          ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-          ctx.stroke();
-        } else if (obj.type === 'arrow') {
-          const headlen = 10 + (obj.strokeWidth || 3);
-          const angle = Math.atan2(obj.ey - obj.sy, obj.ex - obj.sx);
-          ctx.moveTo(obj.sx, obj.sy);
-          ctx.lineTo(obj.ex, obj.ey);
-          ctx.lineTo(
-            obj.ex - headlen * Math.cos(angle - Math.PI / 6),
-            obj.ey - headlen * Math.sin(angle - Math.PI / 6)
-          );
-          ctx.moveTo(obj.ex, obj.ey);
-          ctx.lineTo(
-            obj.ex - headlen * Math.cos(angle + Math.PI / 6),
-            obj.ey - headlen * Math.sin(angle + Math.PI / 6)
-          );
-          ctx.stroke();
-        } else if (obj.type === 'text') {
-          ctx.fillText(obj.text, obj.x, obj.y);
-        } else if (obj.type === 'pen') {
-          if (obj.points.length > 0) {
-            ctx.beginPath();
-            ctx.moveTo(obj.points[0].x, obj.points[0].y);
-            for (let i = 1; i < obj.points.length; i++) {
-              ctx.lineTo(obj.points[i].x, obj.points[i].y);
-            }
-            ctx.stroke();
-          }
-        }
-
-        if (index === selectedObjectIndex) {
-          ctx.save();
-          ctx.strokeStyle = 'blue';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-
-          if (obj.type === 'rect' || obj.type === 'circle') {
-            ctx.strokeRect(
-              obj.x - 5,
-              obj.y - 5,
-              obj.width + 10,
-              obj.height + 10
-            );
-          } else if (obj.type === 'text') {
-            const fontSize = obj.fontSize || 20;
-            const width = obj.text.length * (fontSize * 0.6);
-            const height = fontSize;
-            ctx.strokeRect(
-              obj.x - 5,
-              obj.y - height - 5,
-              width + 10,
-              height + 10
-            );
-          } else if (obj.type === 'arrow') {
-            // Arrow selection is just handles usually, but let's keep dashed line if needed?
-            // Actually arrow selection box is tricky. Let's rely on handles.
-          } else if (obj.type === 'pen') {
-            // Bounding box for pen? Too expensive to calc every frame?
-            // Just highlight start/end for now or skip
-          }
-          ctx.restore();
-
-          // Draw resize handles
-          const handles = getResizeHandles(obj);
-          ctx.fillStyle = 'white';
-          ctx.strokeStyle = 'blue';
-          ctx.lineWidth = 1;
-          Object.values(handles).forEach((handle) => {
-            ctx.beginPath();
-            ctx.rect(handle.x, handle.y, handle.w, handle.h);
-            ctx.fill();
-            ctx.stroke();
-          });
-        }
-      };
-
-      objects.forEach((obj, index) => drawShape(obj, index));
+      objects.forEach((obj, index) =>
+        drawShape(ctx, obj, index, editingIndex, selectedObjectIndex)
+      );
 
       // Draw Preview
       if (drawingStart) {
@@ -197,14 +124,20 @@ const ImageEditor = forwardRef(
             width = width < 0 ? -size : size;
             height = height < 0 ? -size : size;
           }
-          drawShape({
-            ...previewObj,
-            type: 'rect',
-            x: drawingStart.x,
-            y: drawingStart.y,
-            width: width,
-            height: height,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'rect',
+              x: drawingStart.x,
+              y: drawingStart.y,
+              width: width,
+              height: height,
+            },
+            -1,
+            null,
+            null
+          );
         } else if (currentTool === 'circle' && currentDragPos) {
           let width = currentDragPos.x - drawingStart.x;
           let height = currentDragPos.y - drawingStart.y;
@@ -213,14 +146,20 @@ const ImageEditor = forwardRef(
             width = width < 0 ? -size : size;
             height = height < 0 ? -size : size;
           }
-          drawShape({
-            ...previewObj,
-            type: 'circle',
-            x: drawingStart.x,
-            y: drawingStart.y,
-            width: width,
-            height: height,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'circle',
+              x: drawingStart.x,
+              y: drawingStart.y,
+              width: width,
+              height: height,
+            },
+            -1,
+            null,
+            null
+          );
         } else if (currentTool === 'arrow' && currentDragPos) {
           let ex = currentDragPos.x;
           let ey = currentDragPos.y;
@@ -233,20 +172,32 @@ const ImageEditor = forwardRef(
             ex = drawingStart.x + distance * Math.cos(snapAngle);
             ey = drawingStart.y + distance * Math.sin(snapAngle);
           }
-          drawShape({
-            ...previewObj,
-            type: 'arrow',
-            sx: drawingStart.x,
-            sy: drawingStart.y,
-            ex: ex,
-            ey: ey,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'arrow',
+              sx: drawingStart.x,
+              sy: drawingStart.y,
+              ex: ex,
+              ey: ey,
+            },
+            -1,
+            null,
+            null
+          );
         } else if (currentTool === 'pen' && currentPath.length > 0) {
-          drawShape({
-            ...previewObj,
-            type: 'pen',
-            points: currentPath,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'pen',
+              points: currentPath,
+            },
+            -1,
+            null,
+            null
+          );
         }
       }
     }, [
@@ -430,6 +381,59 @@ const ImageEditor = forwardRef(
         setSelectedObjectIndex(null);
         setEditingIndex(null);
       },
+      applyCrop: () => {
+        if (!loadedImage || !cropRect) return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = cropRect.width;
+        canvas.height = cropRect.height;
+
+        // Draw cropped image
+        ctx.drawImage(
+          loadedImage,
+          cropRect.x,
+          cropRect.y,
+          cropRect.width,
+          cropRect.height,
+          0,
+          0,
+          cropRect.width,
+          cropRect.height
+        );
+
+        const newImageSrc = canvas.toDataURL();
+        setImageSrc(newImageSrc);
+        setImgDimensions({ width: cropRect.width, height: cropRect.height });
+
+        // Shift objects
+        const newObjects = objects.map((obj) => {
+          const newObj = { ...obj };
+          if (
+            newObj.type === 'rect' ||
+            newObj.type === 'circle' ||
+            newObj.type === 'text'
+          ) {
+            newObj.x -= cropRect.x;
+            newObj.y -= cropRect.y;
+          } else if (newObj.type === 'arrow') {
+            newObj.sx -= cropRect.x;
+            newObj.sy -= cropRect.y;
+            newObj.ex -= cropRect.x;
+            newObj.ey -= cropRect.y;
+          } else if (newObj.type === 'pen') {
+            newObj.points = newObj.points.map((p) => ({
+              x: p.x - cropRect.x,
+              y: p.y - cropRect.y,
+            }));
+          }
+          return newObj;
+        });
+
+        setObjects(newObjects);
+        saveHistoryState(newObjects); // Save history manually as objects changed
+        setCropRect(null);
+      },
       undo,
       redo,
       hasImage: () => !!imageSrc,
@@ -446,9 +450,36 @@ const ImageEditor = forwardRef(
       };
     };
 
-    const handleMouseDown = (e) => {
+    const handleMouseDown = (e, handleId = null) => {
       if (!imageSrc) return;
       const { x, y } = getCanvasCoordinates(e);
+
+      if (currentTool === 'crop' && cropRect) {
+        if (handleId) {
+          setResizingHandle(handleId);
+          setDragOffset({ x, y });
+          return;
+        }
+
+        const handles = getResizeHandles({ ...cropRect, type: 'rect' });
+        for (const [key, handle] of Object.entries(handles)) {
+          if (isPointInHandle(x, y, handle)) {
+            setResizingHandle(key);
+            setDragOffset({ x, y });
+            return;
+          }
+        }
+        if (
+          x >= cropRect.x &&
+          x <= cropRect.x + cropRect.width &&
+          y >= cropRect.y &&
+          y <= cropRect.y + cropRect.height
+        ) {
+          setIsDragging(true);
+          setDragOffset({ x: x - cropRect.x, y: y - cropRect.y });
+        }
+        return;
+      }
 
       if (currentTool === 'select') {
         // Check for resize handles first
@@ -551,6 +582,44 @@ const ImageEditor = forwardRef(
 
     const handleMouseMove = (e) => {
       const { x, y } = getCanvasCoordinates(e);
+
+      if (currentTool === 'crop' && cropRect) {
+        if (resizingHandle) {
+          let newRect = { ...cropRect };
+          if (resizingHandle === 'br') {
+            newRect.width = x - newRect.x;
+            newRect.height = y - newRect.y;
+          } else if (resizingHandle === 'bl') {
+            const oldRight = newRect.x + newRect.width;
+            newRect.x = x;
+            newRect.width = oldRight - x;
+            newRect.height = y - newRect.y;
+          } else if (resizingHandle === 'tr') {
+            const oldBottom = newRect.y + newRect.height;
+            newRect.y = y;
+            newRect.height = oldBottom - y;
+            newRect.width = x - newRect.x;
+          } else if (resizingHandle === 'tl') {
+            const oldRight = newRect.x + newRect.width;
+            const oldBottom = newRect.y + newRect.height;
+            newRect.x = x;
+            newRect.y = y;
+            newRect.width = oldRight - x;
+            newRect.height = oldBottom - y;
+          }
+          // Constrain minimum size
+          if (newRect.width < 10) newRect.width = 10;
+          if (newRect.height < 10) newRect.height = 10;
+          setCropRect(newRect);
+        } else if (isDragging) {
+          setCropRect({
+            ...cropRect,
+            x: x - dragOffset.x,
+            y: y - dragOffset.y,
+          });
+        }
+        return;
+      }
 
       if (currentTool === 'select' && selectedObjectIndex !== null) {
         if (resizingHandle) {
@@ -698,6 +767,13 @@ const ImageEditor = forwardRef(
     };
 
     const handleMouseUp = (e) => {
+      if (currentTool === 'crop') {
+        setResizingHandle(null);
+        setIsDragging(false);
+        setDragOffset(null);
+        return;
+      }
+
       if (currentTool === 'select') {
         setResizingHandle(null);
         setDragOffset(null);
@@ -944,39 +1020,19 @@ const ImageEditor = forwardRef(
                 onMouseUp={handleMouseUp}
                 onDoubleClick={handleDoubleClick}
               />
-              {editingIndex !== null && objects[editingIndex] && (
-                <textarea
-                  value={objects[editingIndex].text}
-                  onChange={(e) => handleTextChange(e, editingIndex)}
-                  onBlur={handleTextBlur}
-                  autoFocus
-                  placeholder="Type text..."
-                  style={{
-                    position: 'absolute',
-                    left: objects[editingIndex].x * zoomLevel,
-                    top:
-                      (objects[editingIndex].y -
-                        (objects[editingIndex].fontSize || 20)) *
-                      zoomLevel,
-                    fontSize: `${(objects[editingIndex].fontSize || 20) * zoomLevel}px`,
-                    color: objects[editingIndex].color,
-                    background: 'rgba(255, 255, 255, 0.8)',
-                    border: '1px dashed blue',
-                    outline: 'none',
-                    resize: 'none',
-                    overflow: 'hidden',
-                    whiteSpace: 'pre',
-                    minWidth: '100px',
-                    minHeight: '1.2em',
-                    width: `${Math.max(100, (objects[editingIndex].text.length + 1) * ((objects[editingIndex].fontSize || 20) * 0.6) * zoomLevel)}px`,
-                    height: `${Math.max(30, (objects[editingIndex].fontSize || 20) * 1.5 * zoomLevel)}px`,
-                    zIndex: 1000,
-                    padding: '2px',
-                    margin: 0,
-                    fontFamily: 'Arial',
-                    lineHeight: 1,
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                  }}
+              <TextEditor
+                object={objects[editingIndex]}
+                zoomLevel={zoomLevel}
+                onChange={(e) => handleTextChange(e, editingIndex)}
+                onBlur={handleTextBlur}
+              />
+              {currentTool === 'crop' && (
+                <CropOverlay
+                  cropRect={cropRect}
+                  zoomLevel={zoomLevel}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
                 />
               )}
             </div>
