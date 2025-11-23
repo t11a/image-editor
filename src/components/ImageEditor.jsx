@@ -35,6 +35,7 @@ const ImageEditor = forwardRef(
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const isAddingText = useRef(false);
+    const clipboard = useRef(null);
 
     const [selectedObjectIndex, setSelectedObjectIndex] = useState(null);
     const [dragOffset, setDragOffset] = useState(null);
@@ -221,13 +222,24 @@ const ImageEditor = forwardRef(
             height: height,
           });
         } else if (currentTool === 'arrow' && currentDragPos) {
+          let ex = currentDragPos.x;
+          let ey = currentDragPos.y;
+          if (isShiftPressed) {
+            const dx = ex - drawingStart.x;
+            const dy = ey - drawingStart.y;
+            const angle = Math.atan2(dy, dx);
+            const snapAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            ex = drawingStart.x + distance * Math.cos(snapAngle);
+            ey = drawingStart.y + distance * Math.sin(snapAngle);
+          }
           drawShape({
             ...previewObj,
             type: 'arrow',
             sx: drawingStart.x,
             sy: drawingStart.y,
-            ex: currentDragPos.x,
-            ey: currentDragPos.y,
+            ex: ex,
+            ey: ey,
           });
         } else if (currentTool === 'pen' && currentPath.length > 0) {
           drawShape({
@@ -317,6 +329,40 @@ const ImageEditor = forwardRef(
             undo();
           }
           e.preventDefault();
+        }
+
+        // Copy
+        if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+          if (selectedObjectIndex !== null && objects[selectedObjectIndex]) {
+            clipboard.current = JSON.parse(
+              JSON.stringify(objects[selectedObjectIndex])
+            );
+            e.preventDefault();
+          }
+        }
+
+        // Paste
+        if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+          if (clipboard.current) {
+            saveHistory();
+            const newObj = JSON.parse(JSON.stringify(clipboard.current));
+            newObj.x += 20;
+            newObj.y += 20;
+            if (newObj.type === 'arrow') {
+              newObj.sx += 20;
+              newObj.sy += 20;
+              newObj.ex += 20;
+              newObj.ey += 20;
+            } else if (newObj.type === 'pen') {
+              newObj.points = newObj.points.map((p) => ({
+                x: p.x + 20,
+                y: p.y + 20,
+              }));
+            }
+            setObjects((prev) => [...prev, newObj]);
+            setSelectedObjectIndex(objects.length);
+            e.preventDefault();
+          }
         }
       };
 
@@ -563,11 +609,35 @@ const ImageEditor = forwardRef(
             }
           } else if (obj.type === 'arrow') {
             if (resizingHandle === 'start') {
-              obj.sx = x;
-              obj.sy = y;
+              let newSx = x;
+              let newSy = y;
+              if (isShiftPressed) {
+                const dx = newSx - obj.ex;
+                const dy = newSy - obj.ey;
+                const angle = Math.atan2(dy, dx);
+                const snapAngle =
+                  Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                newSx = obj.ex + distance * Math.cos(snapAngle);
+                newSy = obj.ey + distance * Math.sin(snapAngle);
+              }
+              obj.sx = newSx;
+              obj.sy = newSy;
             } else if (resizingHandle === 'end') {
-              obj.ex = x;
-              obj.ey = y;
+              let newEx = x;
+              let newEy = y;
+              if (isShiftPressed) {
+                const dx = newEx - obj.sx;
+                const dy = newEy - obj.sy;
+                const angle = Math.atan2(dy, dx);
+                const snapAngle =
+                  Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                newEx = obj.sx + distance * Math.cos(snapAngle);
+                newEy = obj.sy + distance * Math.sin(snapAngle);
+              }
+              obj.ex = newEx;
+              obj.ey = newEy;
             }
           } else if (obj.type === 'text') {
             // Simple text scaling: distance from center or just drag corner to scale font size
@@ -684,14 +754,25 @@ const ImageEditor = forwardRef(
           },
         ]);
       } else if (currentTool === 'arrow') {
+        let ex = x;
+        let ey = y;
+        if (e.shiftKey) {
+          const dx = ex - drawingStart.x;
+          const dy = ey - drawingStart.y;
+          const angle = Math.atan2(dy, dx);
+          const snapAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          ex = drawingStart.x + distance * Math.cos(snapAngle);
+          ey = drawingStart.y + distance * Math.sin(snapAngle);
+        }
         setObjects([
           ...objects,
           {
             type: 'arrow',
             sx: drawingStart.x,
             sy: drawingStart.y,
-            ex: x,
-            ey: y,
+            ex: ex,
+            ey: ey,
             ...commonProps,
           },
         ]);
@@ -833,6 +914,10 @@ const ImageEditor = forwardRef(
         {!imageSrc ? (
           <div className="drop-zone">
             <p>Drag & Drop an image here</p>
+            <p style={{ fontSize: '0.8em', color: '#666', marginTop: '10px' }}>
+              Images are processed locally in your browser. No data is sent to
+              any server.
+            </p>
           </div>
         ) : (
           <div className="canvas-wrapper">
