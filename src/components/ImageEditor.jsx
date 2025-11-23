@@ -833,6 +833,10 @@ const ImageEditor = forwardRef(
         {!imageSrc ? (
           <div className="drop-zone">
             <p>Drag & Drop an image here</p>
+            <p style={{ fontSize: '0.8em', color: '#666', marginTop: '10px' }}>
+              Images are processed locally in your browser. No data is sent to
+              any server.
+            </p>
           </div>
         ) : (
           <div className="canvas-wrapper">
