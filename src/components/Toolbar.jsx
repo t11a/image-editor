@@ -15,6 +15,8 @@ const Toolbar = ({
   onColorChange,
   strokeWidth,
   onWidthChange,
+  fontSize,
+  onFontSizeChange,
 }) => {
   return (
     <div className="toolbar">
@@ -113,6 +115,17 @@ const Toolbar = ({
           title={`Stroke Width: ${strokeWidth}px`}
           style={{ width: '80px' }}
         />
+        {currentTool === 'text' && (
+          <input
+            type="number"
+            min="10"
+            max="100"
+            value={fontSize}
+            onChange={(e) => onFontSizeChange(parseInt(e.target.value))}
+            title={`Font Size: ${fontSize}px`}
+            style={{ width: '60px', marginLeft: '10px' }}
+          />
+        )}
       </div>
       <div className="toolbar-group">
         <button onClick={onZoomOut} title="Zoom Out">

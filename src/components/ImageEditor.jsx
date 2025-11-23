@@ -8,7 +8,17 @@ import React, {
 } from 'react';
 
 const ImageEditor = forwardRef(
-  ({ zoomLevel, currentTool, onImageLoad, currentColor, strokeWidth }, ref) => {
+  (
+    {
+      zoomLevel,
+      currentTool,
+      onImageLoad,
+      currentColor,
+      strokeWidth,
+      fontSize,
+    },
+    ref
+  ) => {
     const [imageSrc, setImageSrc] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [objects, setObjects] = useState([]); // { type, x, y, width, height, color, width, text, points, ... }
@@ -75,8 +85,9 @@ const ImageEditor = forwardRef(
           radius
         );
       } else if (obj.type === 'text') {
-        const width = obj.text.length * 12;
-        const height = 20;
+        const fontSize = obj.fontSize || 20;
+        const width = obj.text.length * (fontSize * 0.6); // Approx width
+        const height = fontSize;
         return (
           x >= obj.x && x <= obj.x + width && y >= obj.y - height && y <= obj.y
         );
@@ -131,7 +142,7 @@ const ImageEditor = forwardRef(
         ctx.strokeStyle = obj.color || 'red';
         ctx.lineWidth = obj.strokeWidth || 3;
         ctx.fillStyle = obj.color || 'red';
-        ctx.font = '20px Arial';
+        ctx.font = `${obj.fontSize || 20}px Arial`;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
@@ -187,8 +198,9 @@ const ImageEditor = forwardRef(
               obj.height + 10
             );
           } else if (obj.type === 'text') {
-            const width = obj.text.length * 12;
-            const height = 20;
+            const fontSize = obj.fontSize || 20;
+            const width = obj.text.length * (fontSize * 0.6);
+            const height = fontSize;
             ctx.strokeRect(
               obj.x - 5,
               obj.y - height - 5,
@@ -214,6 +226,7 @@ const ImageEditor = forwardRef(
         const previewObj = {
           color: currentColor,
           strokeWidth: strokeWidth,
+          fontSize: fontSize,
         };
 
         if (currentTool === 'rect' && currentDragPos) {
@@ -262,6 +275,7 @@ const ImageEditor = forwardRef(
       currentPath,
       editingIndex,
       strokeWidth,
+      fontSize,
     ]);
 
     useEffect(() => {
@@ -418,6 +432,7 @@ const ImageEditor = forwardRef(
           text: '',
           color: currentColor,
           strokeWidth: strokeWidth,
+          fontSize: fontSize,
         };
         const newObjects = [...currentObjects, newTextObj];
         setObjects(newObjects);
@@ -517,6 +532,7 @@ const ImageEditor = forwardRef(
       const commonProps = {
         color: currentColor,
         strokeWidth: strokeWidth,
+        fontSize: fontSize,
       };
 
       if (currentTool === 'rect') {
@@ -731,8 +747,11 @@ const ImageEditor = forwardRef(
                   style={{
                     position: 'absolute',
                     left: objects[editingIndex].x * zoomLevel,
-                    top: (objects[editingIndex].y - 20) * zoomLevel,
-                    fontSize: `${20 * zoomLevel}px`,
+                    top:
+                      (objects[editingIndex].y -
+                        (objects[editingIndex].fontSize || 20)) *
+                      zoomLevel,
+                    fontSize: `${(objects[editingIndex].fontSize || 20) * zoomLevel}px`,
                     color: objects[editingIndex].color,
                     background: 'rgba(255, 255, 255, 0.8)',
                     border: '1px dashed blue',
@@ -742,8 +761,8 @@ const ImageEditor = forwardRef(
                     whiteSpace: 'pre',
                     minWidth: '100px',
                     minHeight: '1.2em',
-                    width: `${Math.max(100, (objects[editingIndex].text.length + 1) * 12 * zoomLevel)}px`,
-                    height: `${Math.max(30, 30 * zoomLevel)}px`,
+                    width: `${Math.max(100, (objects[editingIndex].text.length + 1) * ((objects[editingIndex].fontSize || 20) * 0.6) * zoomLevel)}px`,
+                    height: `${Math.max(30, (objects[editingIndex].fontSize || 20) * 1.5 * zoomLevel)}px`,
                     zIndex: 1000,
                     padding: '2px',
                     margin: 0,
