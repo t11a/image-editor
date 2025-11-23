@@ -11,6 +11,9 @@ import {
   isPointInHandle,
   isPointInObject,
 } from '../utils/shapeUtils';
+import { drawShape } from '../utils/renderUtils';
+import CropOverlay from './CropOverlay';
+import TextEditor from './TextEditor';
 import useHistory from '../hooks/useHistory';
 
 const ImageEditor = forwardRef(
@@ -97,103 +100,13 @@ const ImageEditor = forwardRef(
         ctx.drawImage(loadedImage, 0, 0);
       }
 
-      const drawShape = (obj, index) => {
-        // Skip rendering text if it's being edited
-        if (index === editingIndex && obj.type === 'text') return;
+      if (loadedImage) {
+        ctx.drawImage(loadedImage, 0, 0);
+      }
 
-        ctx.beginPath();
-        ctx.strokeStyle = obj.color || 'red';
-        ctx.lineWidth = obj.strokeWidth || 3;
-        ctx.fillStyle = obj.color || 'red';
-        ctx.font = `${obj.fontSize || 20}px Arial`;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        if (obj.type === 'rect') {
-          ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
-        } else if (obj.type === 'circle') {
-          ctx.beginPath();
-          const radiusX = Math.abs(obj.width / 2);
-          const radiusY = Math.abs(obj.height / 2);
-          const centerX = obj.x + obj.width / 2;
-          const centerY = obj.y + obj.height / 2;
-          ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-          ctx.stroke();
-        } else if (obj.type === 'arrow') {
-          const headlen = 10 + (obj.strokeWidth || 3);
-          const angle = Math.atan2(obj.ey - obj.sy, obj.ex - obj.sx);
-          ctx.moveTo(obj.sx, obj.sy);
-          ctx.lineTo(obj.ex, obj.ey);
-          ctx.lineTo(
-            obj.ex - headlen * Math.cos(angle - Math.PI / 6),
-            obj.ey - headlen * Math.sin(angle - Math.PI / 6)
-          );
-          ctx.moveTo(obj.ex, obj.ey);
-          ctx.lineTo(
-            obj.ex - headlen * Math.cos(angle + Math.PI / 6),
-            obj.ey - headlen * Math.sin(angle + Math.PI / 6)
-          );
-          ctx.stroke();
-        } else if (obj.type === 'text') {
-          ctx.fillText(obj.text, obj.x, obj.y);
-        } else if (obj.type === 'pen') {
-          if (obj.points.length > 0) {
-            ctx.beginPath();
-            ctx.moveTo(obj.points[0].x, obj.points[0].y);
-            for (let i = 1; i < obj.points.length; i++) {
-              ctx.lineTo(obj.points[i].x, obj.points[i].y);
-            }
-            ctx.stroke();
-          }
-        }
-
-        if (index === selectedObjectIndex) {
-          ctx.save();
-          ctx.strokeStyle = 'blue';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-
-          if (obj.type === 'rect' || obj.type === 'circle') {
-            ctx.strokeRect(
-              obj.x - 5,
-              obj.y - 5,
-              obj.width + 10,
-              obj.height + 10
-            );
-          } else if (obj.type === 'text') {
-            const fontSize = obj.fontSize || 20;
-            const width = obj.text.length * (fontSize * 0.6);
-            const height = fontSize;
-            ctx.strokeRect(
-              obj.x - 5,
-              obj.y - height - 5,
-              width + 10,
-              height + 10
-            );
-          } else if (obj.type === 'arrow') {
-            // Arrow selection is just handles usually, but let's keep dashed line if needed?
-            // Actually arrow selection box is tricky. Let's rely on handles.
-          } else if (obj.type === 'pen') {
-            // Bounding box for pen? Too expensive to calc every frame?
-            // Just highlight start/end for now or skip
-          }
-          ctx.restore();
-
-          // Draw resize handles
-          const handles = getResizeHandles(obj);
-          ctx.fillStyle = 'white';
-          ctx.strokeStyle = 'blue';
-          ctx.lineWidth = 1;
-          Object.values(handles).forEach((handle) => {
-            ctx.beginPath();
-            ctx.rect(handle.x, handle.y, handle.w, handle.h);
-            ctx.fill();
-            ctx.stroke();
-          });
-        }
-      };
-
-      objects.forEach((obj, index) => drawShape(obj, index));
+      objects.forEach((obj, index) =>
+        drawShape(ctx, obj, index, editingIndex, selectedObjectIndex)
+      );
 
       // Draw Preview
       if (drawingStart) {
@@ -211,14 +124,20 @@ const ImageEditor = forwardRef(
             width = width < 0 ? -size : size;
             height = height < 0 ? -size : size;
           }
-          drawShape({
-            ...previewObj,
-            type: 'rect',
-            x: drawingStart.x,
-            y: drawingStart.y,
-            width: width,
-            height: height,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'rect',
+              x: drawingStart.x,
+              y: drawingStart.y,
+              width: width,
+              height: height,
+            },
+            -1,
+            null,
+            null
+          );
         } else if (currentTool === 'circle' && currentDragPos) {
           let width = currentDragPos.x - drawingStart.x;
           let height = currentDragPos.y - drawingStart.y;
@@ -227,14 +146,20 @@ const ImageEditor = forwardRef(
             width = width < 0 ? -size : size;
             height = height < 0 ? -size : size;
           }
-          drawShape({
-            ...previewObj,
-            type: 'circle',
-            x: drawingStart.x,
-            y: drawingStart.y,
-            width: width,
-            height: height,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'circle',
+              x: drawingStart.x,
+              y: drawingStart.y,
+              width: width,
+              height: height,
+            },
+            -1,
+            null,
+            null
+          );
         } else if (currentTool === 'arrow' && currentDragPos) {
           let ex = currentDragPos.x;
           let ey = currentDragPos.y;
@@ -247,20 +172,32 @@ const ImageEditor = forwardRef(
             ex = drawingStart.x + distance * Math.cos(snapAngle);
             ey = drawingStart.y + distance * Math.sin(snapAngle);
           }
-          drawShape({
-            ...previewObj,
-            type: 'arrow',
-            sx: drawingStart.x,
-            sy: drawingStart.y,
-            ex: ex,
-            ey: ey,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'arrow',
+              sx: drawingStart.x,
+              sy: drawingStart.y,
+              ex: ex,
+              ey: ey,
+            },
+            -1,
+            null,
+            null
+          );
         } else if (currentTool === 'pen' && currentPath.length > 0) {
-          drawShape({
-            ...previewObj,
-            type: 'pen',
-            points: currentPath,
-          });
+          drawShape(
+            ctx,
+            {
+              ...previewObj,
+              type: 'pen',
+              points: currentPath,
+            },
+            -1,
+            null,
+            null
+          );
         }
       }
     }, [
@@ -1083,100 +1020,20 @@ const ImageEditor = forwardRef(
                 onMouseUp={handleMouseUp}
                 onDoubleClick={handleDoubleClick}
               />
-              {editingIndex !== null && objects[editingIndex] && (
-                <textarea
-                  value={objects[editingIndex].text}
-                  onChange={(e) => handleTextChange(e, editingIndex)}
-                  onBlur={handleTextBlur}
-                  autoFocus
-                  placeholder="Type text..."
-                  style={{
-                    position: 'absolute',
-                    left: objects[editingIndex].x * zoomLevel,
-                    top:
-                      (objects[editingIndex].y -
-                        (objects[editingIndex].fontSize || 20)) *
-                      zoomLevel,
-                    fontSize: `${(objects[editingIndex].fontSize || 20) * zoomLevel}px`,
-                    color: objects[editingIndex].color,
-                    background: 'rgba(255, 255, 255, 0.8)',
-                    border: '1px dashed blue',
-                    outline: 'none',
-                    resize: 'none',
-                    overflow: 'hidden',
-                    whiteSpace: 'pre',
-                    minWidth: '100px',
-                    minHeight: '1.2em',
-                    width: `${Math.max(100, (objects[editingIndex].text.length + 1) * ((objects[editingIndex].fontSize || 20) * 0.6) * zoomLevel)}px`,
-                    height: `${Math.max(30, (objects[editingIndex].fontSize || 20) * 1.5 * zoomLevel)}px`,
-                    zIndex: 1000,
-                    padding: '2px',
-                    margin: 0,
-                    fontFamily: 'Arial',
-                    lineHeight: 1,
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                  }}
-                />
-              )}
-              {currentTool === 'crop' && cropRect && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: cropRect.x * zoomLevel,
-                    top: cropRect.y * zoomLevel,
-                    width: cropRect.width * zoomLevel,
-                    height: cropRect.height * zoomLevel,
-                    border: '2px dashed white',
-                    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
-                    pointerEvents: 'auto',
-                    cursor: 'move',
-                  }}
-                  onMouseDown={(e) => {
-                    // We need to handle mouse down here to start dragging the crop rect
-                    // But our current logic is in canvas.onMouseDown.
-                    // Let's forward the event or handle it here.
-                    // If we handle it here, we need to adapt handleMouseDown.
-                    // For now, let's just let it bubble? No, it's a sibling or child of wrapper.
-                    // It is a sibling of canvas.
-                    // If we click here, canvas.onMouseDown won't fire.
-                    // So we MUST handle it here.
-                    handleMouseDown(e);
-                  }}
+              <TextEditor
+                object={objects[editingIndex]}
+                zoomLevel={zoomLevel}
+                onChange={(e) => handleTextChange(e, editingIndex)}
+                onBlur={handleTextBlur}
+              />
+              {currentTool === 'crop' && (
+                <CropOverlay
+                  cropRect={cropRect}
+                  zoomLevel={zoomLevel}
+                  onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
-                >
-                  {/* Handles */}
-                  {['tl', 'tr', 'bl', 'br'].map((handle) => (
-                    <div
-                      key={handle}
-                      style={{
-                        position: 'absolute',
-                        width: '10px',
-                        height: '10px',
-                        background: 'white',
-                        border: '1px solid black',
-                        top: handle.includes('t') ? '-5px' : 'calc(100% - 5px)',
-                        left: handle.includes('l')
-                          ? '-5px'
-                          : 'calc(100% - 5px)',
-                        cursor:
-                          handle === 'tl' || handle === 'br'
-                            ? 'nwse-resize'
-                            : 'nesw-resize',
-                        pointerEvents: 'auto',
-                      }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation(); // Don't trigger drag move
-                        // We need to trigger resize.
-                        // We can call handleMouseDown but we need to make sure it detects the handle.
-                        // Our handle detection logic relies on coordinates.
-                        // If we pass the event, getCanvasCoordinates will calculate pos relative to canvas.
-                        // Since this overlay is exactly over the crop rect on canvas, the coords should match.
-                        handleMouseDown(e, handle);
-                      }}
-                    />
-                  ))}
-                </div>
+                />
               )}
             </div>
           </div>
