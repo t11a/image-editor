@@ -43,6 +43,9 @@ function App() {
       if (obj.strokeWidth) {
         setStrokeWidth(obj.strokeWidth);
       }
+      if (obj.color) {
+        setCurrentColor(obj.color);
+      }
     }
   }, []);
 
