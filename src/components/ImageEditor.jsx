@@ -237,6 +237,28 @@ const ImageEditor = forwardRef(
       }
     }, [fontSize, selectedObjectIndex, objects]);
 
+    // Update color of selected object when currentColor prop changes
+    useEffect(() => {
+      if (
+        currentTool === 'select' &&
+        selectedObjectIndex !== null &&
+        objects[selectedObjectIndex]
+      ) {
+        const obj = objects[selectedObjectIndex];
+        if (['rect', 'circle', 'arrow', 'pen', 'text'].includes(obj.type)) {
+          if (obj.color !== currentColor) {
+            saveHistory(); // Save history before changing color
+            const updatedObjects = [...objects];
+            updatedObjects[selectedObjectIndex] = {
+              ...updatedObjects[selectedObjectIndex],
+              color: currentColor,
+            };
+            setObjects(updatedObjects);
+          }
+        }
+      }
+    }, [currentColor, selectedObjectIndex, objects, currentTool, saveHistory]);
+
     // Update stroke width of selected object when strokeWidth prop changes
     useEffect(() => {
       if (selectedObjectIndex !== null && objects[selectedObjectIndex]) {
